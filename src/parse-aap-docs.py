@@ -24,6 +24,10 @@ class ParseAdocs:
         print(f"total: {len(self.adocs_dict)}")
         # for k,v in self.adocs_dict.items():
         #     print(v)
+        # self.validate(has_url)
+
+
+    def validate(self, has_url):
         valid = 0
         invalid = 0
         for adoc in has_url:
@@ -44,7 +48,9 @@ class ParseAdocs:
     def parse_title_docs(self):
         title_docs = list(filter(lambda x: self.adocs_dict[x]["url"] != None, self.adocs_dict))
         for title_doc in title_docs:
-            if title_doc == "downstream/titles/aap-hardening/master.adoc":
+            if (title_doc == "downstream/titles/aap-hardening/master.adoc" or
+                title_doc == "downstream/titles/upgrade/master.adoc"):
+                self.adocs_dict[title_doc]["url"] = None
                 continue
             print(title_doc, self.adocs_dict[title_doc]["url"])
             self.simulate_includes(self.adocs_dict[title_doc], self.adocs_dict[title_doc]["url"])
