@@ -1,3 +1,4 @@
+import os
 import re
 from pathlib import Path
 
@@ -35,7 +36,7 @@ class ParseAdocs:
                         pass
                         # print(f"{title} -> {self.title_dict[title]}")
                         dir_name = str(docinfo.parents[0])
-                        i = dir_name.index("/downstream/")
+                        i = dir_name.index("downstream/")
                         master_adoc = f"{dir_name[i:]}/master.adoc"
                         if master_adoc not in self.adocs_dict:
                             print(f"NOT FOUND: {master_adoc}")
@@ -47,52 +48,55 @@ class ParseAdocs:
                     count += 1
         return
 
+    def get_adoc_id_and_context(self, adoc_path):
+        id = None
+        id_pattern = re.compile(r'\[id=["\']([^"\']+)["\']\]')
+        context = None
+        context_pattern = re.compile(r':context:\s*(.+)')
+        for line in open(adoc_path):
+            line = line.strip()
+            m = id_pattern.match(line)
+            if m:
+                id = m.group(1)
+                if '{' in id:
+                    print(f"id={id} {adoc_path}")
+            m = context_pattern.match(line)
+            if m:
+                context = m.group(1)
+                print(f"context={context}")
+
+        return id,context
+
 
     def get_dict(self):
         d = {}
         for adoc in self.get_adocs():
             path_name = str(adoc)
-            i = path_name.find("/downstream/")
+            i = path_name.find("downstream/")
             project_file_name = path_name[i:]
+            id, context = self.get_adoc_id_and_context(path_name)
             d[project_file_name] = {
                 "path_name": path_name,
                 "includes": set(),
                 "included_by": set(),
                 "broken_links": set(),
                 "url": None,
+                "id": id,
+                "context": context,
             }
         return d
 
 
     def find_include_file(self, source, include_file):
-        file_name = f"/downstream/{include_file}"
-        found = file_name in self.adocs_dict
-
-        if not found:
-            if include_file.startswith("../"):
-                file_name = f"/downstream/{include_file[3:]}"
-                found = file_name in self.adocs_dict
-
-        if not found:
-            i = source.rfind("/")
-            if include_file.startswith("../"):
-                i = source[:i].rfind("/")
-                file_name = f"{source[:i]}/{include_file[3:]}"
-            else:
-                file_name = f"{source[:i]}/{include_file}"
-            found = file_name in self.adocs_dict
-
-        if not found:
-            for subdirectory in ["assemblies", "modules"]:
-                file_name = f"/downstream/{subdirectory}/{include_file}"
-                found = file_name in self.adocs_dict
-                if found:
-                    break
-
-        if not found:
+        base_path = Path(self.base_dir)
+        parent_path = base_path.joinpath(Path(source).parents[0])
+        include_file_path = parent_path.joinpath(include_file)
+        include_file_path = os.path.realpath(include_file_path)
+        i = include_file_path.find("downstream/")
+        file_name = include_file_path[i:]
+        if file_name not in self.adocs_dict:
             print(f"NOT FOUND: {include_file} (source: {source})")
             file_name = None
-
         return file_name
 
 
