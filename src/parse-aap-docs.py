@@ -1,5 +1,8 @@
 import os
 import re
+import time
+import requests
+
 from pathlib import Path
 
 
@@ -14,9 +17,60 @@ class ParseAdocs:
         self.adocs_dict = self.get_dict()
         self.parse_doc_info_files()
         self.parse_include()
+        self.parse_title_docs()
 
+        has_url = list(filter(lambda x: self.adocs_dict[x]["url"] is not None, self.adocs_dict))
+        print(f"has_url: {len(has_url)}")
+        print(f"total: {len(self.adocs_dict)}")
         # for k,v in self.adocs_dict.items():
         #     print(v)
+        valid = 0
+        invalid = 0
+        for adoc in has_url:
+            url = self.adocs_dict[adoc]["url"]
+            try:
+                response = requests.get(url)
+                if response.status_code == 200:
+                    valid += 1
+                else:
+                    print(f"INVALID: {url} status_code={response.status_code}")
+                    invalid += 1
+            except requests.ConnectionError as exception:
+                print(f"INVALID: {url} ConnectionError")
+                invalid += 1
+            print(f"valid={valid} invalid={invalid}")
+            time.sleep(0.05)
+
+    def parse_title_docs(self):
+        title_docs = list(filter(lambda x: self.adocs_dict[x]["url"] != None, self.adocs_dict))
+        for title_doc in title_docs:
+            if title_doc == "downstream/titles/aap-hardening/master.adoc":
+                continue
+            print(title_doc, self.adocs_dict[title_doc]["url"])
+            self.simulate_includes(self.adocs_dict[title_doc], self.adocs_dict[title_doc]["url"])
+
+    def simulate_includes(self, adoc, url, context=None):
+        is_assembly = adoc["content_type"] == "ASSEMBLY" # adoc["project_file_name"].startswith("downstream/assemblies/")
+        if adoc["id"]:
+            id = adoc["id"]
+            if "{context}" in id:
+                if context is None:
+                    id = id.replace("_{context}", "")
+                else:
+                    id = id.replace("{context}", context)
+            if adoc["url"]:
+                print(f"A URL is already set for {adoc['project_file_name']}")
+            else:
+                adoc["url"] = f"{url}/{id}" if is_assembly else f"{url}#{id}"
+                print(f"A URL {adoc['url']} is set for {adoc['project_file_name']} context={context}")
+        if adoc["context"]:
+            context = adoc["context"]
+        for include in adoc["includes"]:
+            self.simulate_includes(
+                self.adocs_dict[include],
+                adoc["url"] if (is_assembly and adoc["url"]) else url,
+                context)
+
 
 
     def get_adocs(self):
@@ -53,6 +107,8 @@ class ParseAdocs:
         id_pattern = re.compile(r'\[id=["\']([^"\']+)["\']\]')
         context = None
         context_pattern = re.compile(r':context:\s*(.+)')
+        content_type = None
+        content_type_pattern = re.compile(r':_mod-docs-content-type:\s*(.+)')
         for line in open(adoc_path):
             line = line.strip()
             m = id_pattern.match(line)
@@ -64,8 +120,12 @@ class ParseAdocs:
             if m:
                 context = m.group(1)
                 print(f"context={context}")
+            m = content_type_pattern.match(line)
+            if m:
+                content_type = m.group(1)
+                print(f"content_type={content_type}")
 
-        return id,context
+        return id,context,content_type
 
 
     def get_dict(self):
@@ -74,8 +134,9 @@ class ParseAdocs:
             path_name = str(adoc)
             i = path_name.find("downstream/")
             project_file_name = path_name[i:]
-            id, context = self.get_adoc_id_and_context(path_name)
+            id, context, content_type = self.get_adoc_id_and_context(path_name)
             d[project_file_name] = {
+                "project_file_name": project_file_name,
                 "path_name": path_name,
                 "includes": set(),
                 "included_by": set(),
@@ -83,6 +144,7 @@ class ParseAdocs:
                 "url": None,
                 "id": id,
                 "context": context,
+                "content_type": content_type,
             }
         return d
 
