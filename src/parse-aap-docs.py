@@ -50,7 +50,9 @@ class ParseAdocs:
             self.simulate_includes(self.adocs_dict[title_doc], self.adocs_dict[title_doc]["url"])
 
     def simulate_includes(self, adoc, url, context=None):
-        is_assembly = adoc["content_type"] == "ASSEMBLY" # adoc["project_file_name"].startswith("downstream/assemblies/")
+        is_assembly = adoc["content_type"] == "ASSEMBLY"
+        nested_assembly = adoc["nested_assembly"]
+
         if adoc["id"]:
             id = adoc["id"]
             if "{context}" in id:
@@ -61,14 +63,17 @@ class ParseAdocs:
             if adoc["url"]:
                 print(f"A URL is already set for {adoc['project_file_name']}")
             else:
-                adoc["url"] = f"{url}/{id}" if is_assembly else f"{url}#{id}"
+                adoc["url"] = f"{url}/{id}" if (is_assembly and not nested_assembly) else f"{url}#{id}"
                 print(f"A URL {adoc['url']} is set for {adoc['project_file_name']} context={context}")
+
         if adoc["context"]:
             context = adoc["context"]
+
+
         for include in adoc["includes"]:
             self.simulate_includes(
                 self.adocs_dict[include],
-                adoc["url"] if (is_assembly and adoc["url"]) else url,
+                adoc["url"] if (is_assembly and adoc["url"] and not nested_assembly) else url,
                 context)
 
 
@@ -109,6 +114,8 @@ class ParseAdocs:
         context_pattern = re.compile(r':context:\s*(.+)')
         content_type = None
         content_type_pattern = re.compile(r':_mod-docs-content-type:\s*(.+)')
+        nested_assembly = False
+        nested_assembly_mark = "ifdef::context[:parent-context: {context}]"
         for line in open(adoc_path):
             line = line.strip()
             m = id_pattern.match(line)
@@ -124,8 +131,10 @@ class ParseAdocs:
             if m:
                 content_type = m.group(1)
                 print(f"content_type={content_type}")
+            if line == nested_assembly_mark:
+                nested_assembly = True
 
-        return id,context,content_type
+        return id,context,content_type,nested_assembly
 
 
     def get_dict(self):
@@ -134,7 +143,7 @@ class ParseAdocs:
             path_name = str(adoc)
             i = path_name.find("downstream/")
             project_file_name = path_name[i:]
-            id, context, content_type = self.get_adoc_id_and_context(path_name)
+            id, context, content_type, nested_assembly = self.get_adoc_id_and_context(path_name)
             d[project_file_name] = {
                 "project_file_name": project_file_name,
                 "path_name": path_name,
@@ -145,6 +154,7 @@ class ParseAdocs:
                 "id": id,
                 "context": context,
                 "content_type": content_type,
+                "nested_assembly": nested_assembly,
             }
         return d
 
