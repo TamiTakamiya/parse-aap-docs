@@ -62,12 +62,17 @@ class ParseAdocs:
             # TODO
             # if (title_doc != "downstream/titles/central-auth/master.adoc"):
             # if (title_doc != "downstream/titles/eda/eda-user-guide/master.adoc"):
+            # if (title_doc != "downstream/titles/aap-plugin-rhdh-install/master.adoc"):
             #     self.adocs_dict[title_doc]["url"] = None
             #     continue
             self.adocs_dict[title_doc]["url"] = self.adocs_dict[title_doc]["url"].replace("/html/", "/html-single/")
             print(title_doc, self.adocs_dict[title_doc]["url"])
 
-            context = { "name": None, "url":self.adocs_dict[title_doc]["url"]}
+            context = {
+                "name": None,
+                "url": self.adocs_dict[title_doc]["url"],
+                "base_url": self.adocs_dict[title_doc]["url"],
+            }
             self.adocs_dict[title_doc]["url"] = self.adocs_dict[title_doc]["url"] + "/index"
             self.simulate_includes(self.adocs_dict[title_doc], context)
 
@@ -86,7 +91,13 @@ class ParseAdocs:
             if adoc["url"]:
                 print(f"A URL is already set for {adoc['project_file_name']}")
             else:
-                adoc["url"] = f"{context['url']}#{id}" if context["name"] else f"{context['url']}/{id}"
+                if context["name"]:
+                    if context["url"] == context["base_url"]:
+                        adoc["url"] = f"{context['url']}/index#{id}"
+                    else:
+                        adoc["url"] = f"{context['url']}#{id}"
+                else:
+                    adoc["url"] = f"{context['url']}/{id}"
                 # adoc["url"] = f"{context['url']}/{id}"
                 # if not self.validate(adoc):
                 #    sys.exit(1)
