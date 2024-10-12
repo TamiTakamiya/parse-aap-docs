@@ -49,7 +49,7 @@ class ParseAdocs:
                 valid += 1
             else:
                 invalid += 1
-        print(f"valid={valid} invalid={invalid}")
+            print(f"valid={valid} invalid={invalid}")
 
 
     def parse_title_docs(self):
@@ -61,15 +61,17 @@ class ParseAdocs:
                 continue
             # TODO
             if (title_doc != "downstream/titles/central-auth/master.adoc"):
+            # if (title_doc != "downstream/titles/eda/eda-user-guide/master.adoc"):
                 self.adocs_dict[title_doc]["url"] = None
                 continue
             print(title_doc, self.adocs_dict[title_doc]["url"])
 
             context = { "name": None, "url":self.adocs_dict[title_doc]["url"]}
+            self.adocs_dict[title_doc]["url"] = self.adocs_dict[title_doc]["url"] + "/index"
             self.simulate_includes(self.adocs_dict[title_doc], context)
 
     def simulate_includes(self, adoc, context):
-        is_assembly = adoc["content_type"] == "ASSEMBLY"
+        id = None
         nested_assembly = adoc["nested_assembly"]
         context_save = copy.copy(context) if nested_assembly else None
 
@@ -85,11 +87,11 @@ class ParseAdocs:
             else:
                 adoc["url"] = f"{context['url']}#{id}" if context["name"] else f"{context['url']}/{id}"
                 if not self.validate(adoc):
-                    sys.exit(1)
+                   sys.exit(1)
                 print(f"A URL {adoc['url']} is set for {adoc['project_file_name']} context={context}")
 
         if adoc["context"]:
-            if not context["name"]:
+            if not context["name"] and id:
                 context["url"] = f"{context['url']}/{id}"
             context["name"] = adoc["context"]
 
@@ -102,7 +104,7 @@ class ParseAdocs:
             context["name"] = context_save["name"]
             context["url"] = context_save["url"]
 
-        print(f'EXIT:{context}')
+        # print(f'EXIT:{context}')
 
 
 
