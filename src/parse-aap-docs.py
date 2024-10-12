@@ -64,6 +64,7 @@ class ParseAdocs:
             # if (title_doc != "downstream/titles/eda/eda-user-guide/master.adoc"):
                 self.adocs_dict[title_doc]["url"] = None
                 continue
+            self.adocs_dict[title_doc]["url"] = self.adocs_dict[title_doc]["url"].replace("/html/", "/html-single/")
             print(title_doc, self.adocs_dict[title_doc]["url"])
 
             context = { "name": None, "url":self.adocs_dict[title_doc]["url"]}
@@ -86,6 +87,7 @@ class ParseAdocs:
                 print(f"A URL is already set for {adoc['project_file_name']}")
             else:
                 adoc["url"] = f"{context['url']}#{id}" if context["name"] else f"{context['url']}/{id}"
+                # adoc["url"] = f"{context['url']}/{id}"
                 if not self.validate(adoc):
                    sys.exit(1)
                 print(f"A URL {adoc['url']} is set for {adoc['project_file_name']} context={context}")
