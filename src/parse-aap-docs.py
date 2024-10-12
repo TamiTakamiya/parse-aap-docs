@@ -1,6 +1,8 @@
 import os
 import re
 import time
+import copy
+import sys
 import requests
 
 from pathlib import Path
@@ -24,25 +26,31 @@ class ParseAdocs:
         print(f"total: {len(self.adocs_dict)}")
         # for k,v in self.adocs_dict.items():
         #     print(v)
-        self.validate(has_url)
+        self.validate_all(has_url)
 
+    def validate(self, adoc):
+        url = adoc["url"]
+        try:
+            response = requests.get(url, allow_redirects=False)
+            if response.status_code == 200:
+                return True
+            else:
+                print(f"INVALID: {url} status_code={response.status_code}")
+                return False
+        except requests.ConnectionError as exception:
+            print(f"INVALID: {url} ConnectionError")
+            return False
 
-    def validate(self, has_url):
+    def validate_all(self, has_url):
         valid = 0
         invalid = 0
         for adoc in has_url:
-            url = self.adocs_dict[adoc]["url"]
-            try:
-                response = requests.get(url, allow_redirects=False)
-                if response.status_code == 200:
-                    valid += 1
-                else:
-                    print(f"INVALID: {url} status_code={response.status_code}")
-                    invalid += 1
-            except requests.ConnectionError as exception:
-                print(f"INVALID: {url} ConnectionError")
+            if self.validate(self.adocs_dict[adoc]):
+                valid += 1
+            else:
                 invalid += 1
-            print(f"valid={valid} invalid={invalid}")
+        print(f"valid={valid} invalid={invalid}")
+
 
     def parse_title_docs(self):
         title_docs = list(filter(lambda x: self.adocs_dict[x]["url"] != None, self.adocs_dict))
@@ -56,34 +64,45 @@ class ParseAdocs:
                 self.adocs_dict[title_doc]["url"] = None
                 continue
             print(title_doc, self.adocs_dict[title_doc]["url"])
-            self.simulate_includes(self.adocs_dict[title_doc], self.adocs_dict[title_doc]["url"])
 
-    def simulate_includes(self, adoc, url, context=None):
+            context = { "name": None, "url":self.adocs_dict[title_doc]["url"]}
+            self.simulate_includes(self.adocs_dict[title_doc], context)
+
+    def simulate_includes(self, adoc, context):
         is_assembly = adoc["content_type"] == "ASSEMBLY"
         nested_assembly = adoc["nested_assembly"]
+        context_save = copy.copy(context) if nested_assembly else None
 
         if adoc["id"]:
             id = adoc["id"]
             if "{context}" in id:
-                if context is None:
+                if context["name"] is None:
                     id = id.replace("_{context}", "")
                 else:
-                    id = id.replace("{context}", context)
+                    id = id.replace("{context}", context["name"])
             if adoc["url"]:
                 print(f"A URL is already set for {adoc['project_file_name']}")
             else:
-                adoc["url"] = f"{url}/{id}" if is_assembly else f"{url}#{id}"
+                adoc["url"] = f"{context['url']}#{id}" if context["name"] else f"{context['url']}/{id}"
+                if not self.validate(adoc):
+                    sys.exit(1)
                 print(f"A URL {adoc['url']} is set for {adoc['project_file_name']} context={context}")
 
         if adoc["context"]:
-            context = adoc["context"]
-
+            if not context["name"]:
+                context["url"] = f"{context['url']}/{id}"
+            context["name"] = adoc["context"]
 
         for include in adoc["includes"]:
             self.simulate_includes(
                 self.adocs_dict[include],
-                adoc["url"] if (is_assembly and adoc["url"]) else url,
                 context)
+
+        if context_save:
+            context["name"] = context_save["name"]
+            context["url"] = context_save["url"]
+
+        print(f'EXIT:{context}')
 
 
 
@@ -124,7 +143,7 @@ class ParseAdocs:
         content_type = None
         content_type_pattern = re.compile(r':_mod-docs-content-type:\s*(.+)')
         nested_assembly = False
-        nested_assembly_pattern = re.compile(r"ifdef::context\[:parent.+: {context}\]")
+        nested_assembly_pattern = re.compile(r"ifdef::parent.+\[:context: {parent-context}\]")
         for line in open(adoc_path):
             line = line.strip()
             m = id_pattern.match(line)
