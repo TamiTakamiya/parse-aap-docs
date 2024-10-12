@@ -12,6 +12,9 @@ class ParseAAPDocs:
     Parse the aap-docs repository and locate Red Hat product document URLs for each
     source Asciidoc file so that they can be used as referenced document links
     displayed on the chatbot UI.
+
+    Reference: Modular documentation reference guide
+    https://redhat-documentation.github.io/modular-docs/
     """
 
     def __init__(self, base_dir, project_document_path, files_to_skip, do_validate=False):
@@ -98,8 +101,8 @@ class ParseAAPDocs:
         :return: None
         """
         id = None
-        nested_assembly = adoc["nested_assembly"]
-        context_save = copy.copy(context) if nested_assembly else None
+        nesting_assembly = adoc["nesting_assembly"]
+        context_save = copy.copy(context) if nesting_assembly else None
 
         if adoc["id"]:
             id = adoc["id"]
@@ -188,16 +191,24 @@ class ParseAAPDocs:
         """
         Parse an Ascii document.
         :param adoc_path: A path to an Ascii document.
-        :return: id, context, content_type, nested_assembly
+        :return: id, context, content_type, nesting_assembly
         """
         id = None
         id_pattern = re.compile(r'\[id=["\']([^"\']+)["\']\]')
         context = None
         context_pattern = re.compile(r":context:\s*(.+)")
+        #
+        # Detect content type
+        # https://github.com/redhat-documentation/vale-at-red-hat/issues/679
+        #
         content_type = None
         content_type_pattern = re.compile(r":_mod-docs-content-type:\s*(.+)")
-        nested_assembly = False
-        nested_assembly_pattern = re.compile(r"ifdef::parent.+\[:context: {parent-context}\]")
+        #
+        # Detect a pattern used for enabling nesting assemblies
+        # https://redhat-documentation.github.io/modular-docs/#nesting-assemblies
+        #
+        nesting_assembly = False
+        nesting_assembly_pattern = re.compile(r"ifdef::parent.+\[:context: {parent-context}\]")
         for line in open(adoc_path):
             line = line.strip()
             m = id_pattern.match(line)
@@ -209,11 +220,11 @@ class ParseAAPDocs:
             m = content_type_pattern.match(line)
             if m:
                 content_type = m.group(1)
-            m = nested_assembly_pattern.match(line)
+            m = nesting_assembly_pattern.match(line)
             if m:
-                nested_assembly = True
+                nesting_assembly = True
 
-        return id, context, content_type, nested_assembly
+        return id, context, content_type, nesting_assembly
 
     def get_dict(self):
         """
@@ -226,7 +237,7 @@ class ParseAAPDocs:
             path_name = str(adoc)
             i = path_name.find(f"{self.project_document_path}/")
             project_file_name = path_name[i:]
-            id, context, content_type, nested_assembly = self.parse_adoc(path_name)
+            id, context, content_type, nesting_assembly = self.parse_adoc(path_name)
             d[project_file_name] = {
                 "project_file_name": project_file_name,
                 "path_name": path_name,
@@ -235,7 +246,7 @@ class ParseAAPDocs:
                 "id": id,
                 "context": context,
                 "content_type": content_type,
-                "nested_assembly": nested_assembly,
+                "nesting_assembly": nesting_assembly,
             }
         return d
 
