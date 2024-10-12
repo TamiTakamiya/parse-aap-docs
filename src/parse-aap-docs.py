@@ -24,7 +24,7 @@ class ParseAdocs:
         print(f"total: {len(self.adocs_dict)}")
         # for k,v in self.adocs_dict.items():
         #     print(v)
-        # self.validate(has_url)
+        self.validate(has_url)
 
 
     def validate(self, has_url):
@@ -33,7 +33,7 @@ class ParseAdocs:
         for adoc in has_url:
             url = self.adocs_dict[adoc]["url"]
             try:
-                response = requests.get(url)
+                response = requests.get(url, allow_redirects=False)
                 if response.status_code == 200:
                     valid += 1
                 else:
@@ -43,13 +43,16 @@ class ParseAdocs:
                 print(f"INVALID: {url} ConnectionError")
                 invalid += 1
             print(f"valid={valid} invalid={invalid}")
-            time.sleep(0.05)
 
     def parse_title_docs(self):
         title_docs = list(filter(lambda x: self.adocs_dict[x]["url"] != None, self.adocs_dict))
         for title_doc in title_docs:
             if (title_doc == "downstream/titles/aap-hardening/master.adoc" or
                 title_doc == "downstream/titles/upgrade/master.adoc"):
+                self.adocs_dict[title_doc]["url"] = None
+                continue
+            # TODO
+            if (title_doc != "downstream/titles/central-auth/master.adoc"):
                 self.adocs_dict[title_doc]["url"] = None
                 continue
             print(title_doc, self.adocs_dict[title_doc]["url"])
@@ -69,7 +72,7 @@ class ParseAdocs:
             if adoc["url"]:
                 print(f"A URL is already set for {adoc['project_file_name']}")
             else:
-                adoc["url"] = f"{url}/{id}" if (is_assembly and not nested_assembly) else f"{url}#{id}"
+                adoc["url"] = f"{url}/{id}" if is_assembly else f"{url}#{id}"
                 print(f"A URL {adoc['url']} is set for {adoc['project_file_name']} context={context}")
 
         if adoc["context"]:
@@ -79,7 +82,7 @@ class ParseAdocs:
         for include in adoc["includes"]:
             self.simulate_includes(
                 self.adocs_dict[include],
-                adoc["url"] if (is_assembly and adoc["url"] and not nested_assembly) else url,
+                adoc["url"] if (is_assembly and adoc["url"]) else url,
                 context)
 
 
@@ -121,7 +124,7 @@ class ParseAdocs:
         content_type = None
         content_type_pattern = re.compile(r':_mod-docs-content-type:\s*(.+)')
         nested_assembly = False
-        nested_assembly_mark = "ifdef::context[:parent-context: {context}]"
+        nested_assembly_pattern = re.compile(r"ifdef::context\[:parent.+: {context}\]")
         for line in open(adoc_path):
             line = line.strip()
             m = id_pattern.match(line)
@@ -137,7 +140,8 @@ class ParseAdocs:
             if m:
                 content_type = m.group(1)
                 print(f"content_type={content_type}")
-            if line == nested_assembly_mark:
+            m = nested_assembly_pattern.match(line)
+            if m:
                 nested_assembly = True
 
         return id,context,content_type,nested_assembly
@@ -153,9 +157,9 @@ class ParseAdocs:
             d[project_file_name] = {
                 "project_file_name": project_file_name,
                 "path_name": path_name,
-                "includes": set(),
-                "included_by": set(),
-                "broken_links": set(),
+                "includes": [],
+                "included_by": [],
+                "broken_links": [],
                 "url": None,
                 "id": id,
                 "context": context,
@@ -190,11 +194,11 @@ class ParseAdocs:
                     file_name = self.find_include_file(k, include_file)
                     if file_name is None:
                         not_found += 1
-                        v["broken_links"].add(include_file)
+                        v["broken_links"].append(include_file)
                     else:
-                        v["includes"].add(file_name)
+                        v["includes"].append(file_name)
                         if file_name in self.adocs_dict:
-                            self.adocs_dict[file_name]["included_by"].add(k)
+                            self.adocs_dict[file_name]["included_by"].append(k)
         print(f"NOT FOUND: {not_found}")
 
 
